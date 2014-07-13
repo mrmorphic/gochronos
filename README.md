@@ -59,3 +59,16 @@ The process is almost the same for repeat items, except that after executing the
 
  *  Logging - although to some degree, this is up to the app, which can wrap
     the action in a logging action.
+
+# What works and doesn't work
+
+## Working
+
+ *  One-time scheduled actions work correctly, and clean up afterwards
+ *  One-time scheduled actions are unit tested, including parameters.
+
+## Not Implemented
+
+ *  Recurring scheduled actions.
+ *  Cancelling one-time actions before they execute (will remove, but
+    won't stop goroutine.)
