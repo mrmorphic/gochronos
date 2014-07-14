@@ -88,20 +88,17 @@ func AddToSchedule(sa *ScheduledAction) {
 	sa.startTimer()
 }
 
+// Add a scheduled action to the schedule.
 func Add(ts *TimeSpec, f ActionFunc, args ...interface{}) *ScheduledAction {
 	sa := NewScheduledAction(ts, f, args)
 	AddToSchedule(sa)
 	return sa
 }
 
-func RemoveFromSchedule(sa *ScheduledAction) {
+// Remove a scheduled action from the schedule.
+func Remove(sa *ScheduledAction) {
 	// Tell the timer goroutine to stop. This in turn will trigger the goroutine to remove itself.
 	sa.stopTimer()
-
-	// add a scheduled action to the list
-	// create a channel to listen for events from triggers
-	// create a goroutine that sends back execution triggers.
-	// On closure of a channel, remove the scheduled item
 }
 
 // Remove scheduled action from list. This assumes the timer goroutine
@@ -228,7 +225,49 @@ func (t *TimeSpec) GetNextExec() time.Time {
 	now := time.Now()
 
 	if t.recurring {
-		// @todo implement
+		// if termination condition is met, return zero time
+		if !t.endTime.IsZero() && t.endTime.Before(now) {
+			return time.Time{}
+		}
+
+		// if start time is in the future, return that
+		if t.startTime.After(now) {
+			return t.startTime
+		}
+
+		// determine period in seconds
+		period := 0
+		switch t.frequency {
+		case FREQ_SECOND:
+			period = 1
+		case FREQ_MINUTE:
+			period = 60
+		case FREQ_HOUR:
+			period = 3600
+		case FREQ_DAY:
+			period = 86400
+		case FREQ_WEEK:
+			period = 604800
+		}
+
+		if period > 0 {
+			// it's a fixed number of seconds period, which excludes months and years
+			period *= t.interval
+
+			// @todo take into account byday, byhour, byminute
+			delta := now.Sub(t.startTime) // difference between start and now.
+			td := int(delta*time.Second) % period
+			prev := time.Unix(now.Unix()-int64(td), 0)
+			next := prev.Add(time.Duration(period) * time.Second)
+			return next
+		}
+
+		// @todo implement month and year
+		switch t.frequency {
+		case FREQ_MONTH:
+		case FREQ_YEAR:
+		}
+
 		return time.Time{}
 	} else {
 		if t.when.Before(now) {
@@ -238,17 +277,14 @@ func (t *TimeSpec) GetNextExec() time.Time {
 	}
 }
 
-// func Replace() {
-
-// }
-
 // Register an instance of a type that might be used for schedule. This is required if actions
 // are being serialised, so that when deserialising, we know how to treat
 // func RegisterType(Action) {
 
 // }
 
-// Clear the schedule of all scheduled actions
+// Clear the schedule of all scheduled actions.
+// @todo if schedule is already defined and there are executing scheduled actions, terminate them so they're GC'd.
 func ClearAll() {
 	schedule = make(map[*ScheduledAction]bool)
 }

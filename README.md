@@ -11,7 +11,7 @@ The most basic usage is a one-time scheduled action. The following adds a new
 one-time scheduled action, to be executed in 2 hours.
 
     when := time.Now().Add(2 * time.Hour)
-    gochronos.Add(NewOneOff(when),
+    gochronos.Add(gochronos.NewOneOff(when),
             func(args ...interface{}) {
                 s := args[0].(string)
                 // do something here
@@ -22,9 +22,9 @@ When adding a scheduled action, you specify the parameters to be passed to the f
 
 Recurring scheduled actions are also possible, and are fairly flexible in how the occurences are specified.
 
-    timeSpec := NewRecurring(map[string]interface{}{
+    timeSpec := gochronos.NewRecurring(map[string]interface{}{
         "starttime": time.Now(),
-        "frequency": "hourly"
+        "frequency": gochronos.FREQ_MINUTE
     })
     gochronos.Add(timeSpec,
             func(args ...interface{}) {
@@ -66,9 +66,16 @@ The process is almost the same for repeat items, except that after executing the
 
  *  One-time scheduled actions work correctly, and clean up afterwards
  *  One-time scheduled actions are unit tested, including parameters.
+ *  Cancellng one-time actions before they execute
+ *  Recurring scheduled actions for second, minute, hour, day and week. Only
+    'second' is unit tested.
+
+## Not Test
+
+ *  Cancelling recurring actions after at least one iteration
 
 ## Not Implemented
 
- *  Recurring scheduled actions.
- *  Cancelling one-time actions before they execute (will remove, but
-    won't stop goroutine.)
+ *  Recurring with month or year frequency
+ *  Recurring with maxnum
+ *  Recurring, by minutes, by hours, by days etc

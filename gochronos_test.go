@@ -1,11 +1,12 @@
 package gochronos
 
 import (
+	// "fmt"
 	"testing"
 	"time"
 )
 
-func TestAdd(t *testing.T) {
+func TestAddOneOff(t *testing.T) {
 	count := 0
 	param1 := ""
 	param2 := 0
