@@ -1,8 +1,27 @@
 package gochronos
 
 import (
+	// "fmt"
 	"sync"
 	"time"
+)
+
+const (
+	FREQ_SECOND int = 1 + iota
+	FREQ_MINUTE
+	FREQ_HOUR
+	FREQ_DAY
+	FREQ_WEEK
+	FREQ_MONTH
+	FREQ_YEAR
+)
+
+// A command that can be sent to a goroutine.
+type command int
+
+const (
+	// Cancel the goroutine for a scheduled action
+	CMD_CANCEL command = 1 + iota
 )
 
 // ActionFunc is basically a function to call when time is up, with optional parameters supplied when
@@ -14,6 +33,15 @@ type ActionFunc func(args ...interface{})
 type TimeSpec struct {
 	recurring bool
 	when      time.Time
+
+	startTime time.Time
+	endTime   time.Time
+	frequency int // one of FREQ_ constants
+	interval  int
+	// byday
+	// byhours
+	// byminute
+	maxNum int
 }
 
 // ScheduledAction represents an action that is scheduled in time. When added to the schedule,
@@ -28,6 +56,8 @@ type ScheduledAction struct {
 
 	// Parameters passed to the action.
 	Parameters []interface{}
+
+	cmdChan chan command
 }
 
 // A list of scheduled actions. This is the schedule that is executed.
@@ -100,48 +130,90 @@ func (sa *ScheduledAction) SetParams(args ...interface{}) {
 
 // Given a scheduled action, start a goroutine for executing.
 func (sc *ScheduledAction) startTimer() {
+	sc.cmdChan = make(chan command)
 	go func() {
+		var timer *time.Timer
+
+	loop:
 		for t := sc.When.GetNextExec(); !t.IsZero(); {
 			d := t.Sub(time.Now())
 			if d < 0 {
-				break
+				d = 0
 			}
-			time.Sleep(d)
-			sc.Action(sc.Parameters...)
+
+			// create the time first time around, or reset it if we're re-using it.
+			if timer == nil {
+				timer = time.NewTimer(d)
+			} else {
+				timer.Reset(d)
+			}
+
+			// wait for either the time, or a command from the command channel
+			select {
+			case _ = <-timer.C:
+				// when timer goes off, we execute the action and repeat the loop
+				sc.Action(sc.Parameters...)
+			case cmd := <-sc.cmdChan:
+				if cmd == CMD_CANCEL {
+					timer.Stop()
+					break loop
+				}
+			}
+			t = sc.When.GetNextExec()
 		}
 		remove(sc)
 	}()
 }
 
+// Stop a scheduled action.
 func (sc *ScheduledAction) stopTimer() {
-
+	// send cancel command to the goroutine
+	sc.cmdChan <- CMD_CANCEL
 }
 
-// create a channel to listen for events from triggers
-// create a goroutine that sends back execution triggers.
-// On closure of a channel, remove the scheduled item
-
-// starttime - (required) a date/time string parsed by strtotime that determines when the first execution of the action should be.
-// frequency - (required) the frequency of execution. Valid values are "hourly", "minutely", "daily", "weekly".
-// interval - (optional, default 10) a multiplier for frequency (e.g. "weekly" with interval of 2 is fortnight.)
-// byday - (optional) a string or array of strings that define days of the week when the action is to be executed. Valid values are "su","mo","tu","we","th","fr","sa"
-// byhour - (optional) an int or array of ints that define the hours of the day when the action is to be executed.
-// byminute - (optional) an int or array of ints that define the minutes of the hours when the action is to be executed.
-
-// start time:		time.Time
-// frequency:		time.Duration
-// start time:		now + time.Duration
-// time.Duration
-// time.Time
-// time.Time
-
+// Create a new one-off time specification from a Time.
 func NewOneOff(t time.Time) *TimeSpec {
 	return &TimeSpec{recurring: false, when: t}
 }
 
-// Create a new recurring time specification
+// Create a new recurring time specification from a map.
 func NewRecurring(config map[string]interface{}) *TimeSpec {
-	return &TimeSpec{recurring: true}
+	result := &TimeSpec{
+		recurring: true,
+		interval:  1,
+		startTime: time.Time{},
+		endTime:   time.Time{},
+		frequency: -1,
+		maxNum:    -1,
+	}
+
+	for k, v := range config {
+		switch k {
+		case "starttime": // expect time
+			result.startTime = v.(time.Time)
+		case "frequency": // expect int, which should be a FREQ_* constant
+			result.frequency = v.(int)
+		case "interval": // expect int: multiplier for frequency e.g. 2 week is a fortnight
+			result.interval = v.(int)
+		// case "byday": // - (optional) a string or array of strings that define days of the week when the action is to be executed. Valid values are "su","mo","tu","we","th","fr","sa"
+		// case "byhours": // byhour - (optional) an int or array of ints that define the hours of the day when the action is to be executed.
+		// case "byminute": // - (optional) an int or array of ints that define the minutes of the hours when the action is to be executed
+		case "endtime": // expect time
+			result.endTime = v.(time.Time)
+		case "maxnum": // expect int
+			result.maxNum = v.(int)
+		}
+	}
+
+	// ensure startime and frequency are provided.
+	if result.startTime.IsZero() {
+		panic("recurring scheduled action must have a start date")
+	}
+	if result.frequency < FREQ_SECOND || result.frequency > FREQ_YEAR {
+		panic("recurring scheduled action must have a frequency")
+	}
+
+	return result
 }
 
 // Given the current time, evaluate what the next execution time is according to the time spec.
