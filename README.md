@@ -54,7 +54,10 @@ The following properties are currently understood by NewRecurring:
     action removed from the schedule.
 
 gochronos.Add() returns a *ScheduledAction value. This can be used to cancel
-it, using Remove(), or change the ScheduledAction properties.
+it, using Remove(), or change the ScheduledAction properties. Changes to the
+time specification of a ScheduledAction that has already started running will
+cause the corresponding goroutine to update when it next executes, so changes
+take effect immediately.
 
 # Persisting the schedule
 
@@ -67,6 +70,12 @@ Each scheduled action is added to a data structure. A new goroutine is created o
 For one-off scheduled items, once the goroutine has executed the action at the appropriate time, the goroutine removes the scheduled action from the schedule, and completes.
 
 The process is almost the same for repeat items, except that after executing the action, it determines if there are more scheduled times to execute, and if so, goes back to sleep until that time.
+
+Each goroutine that executes actions has a command channel. Currently there are two commands:
+
+ *  CMD_CANCEL is sent if the scheduled action is being cancelled.
+ *  CMD_UPDATE_TIME is sent if the time specification of the scheduled action.
+    It causes the goroutine to re-evaluate when it next executes.
 
 # Other features for consideration
 

@@ -22,6 +22,7 @@ type command int
 const (
 	// Cancel the goroutine for a scheduled action
 	CMD_CANCEL command = 1 + iota
+	CMD_UPDATE_TIME
 )
 
 // ActionFunc is basically a function to call when time is up, with optional parameters supplied when
@@ -112,15 +113,24 @@ func remove(sa *ScheduledAction) {
 	scheduleLock.Unlock()
 }
 
-// @todo SetTimeSpec should cause the timer to re-evaluate if executing
+// Change the time specification on a scheduled action. If the timer goroutine
+// has been started, send it a command to tell it to update when it next executes.
+// The change takes effect immediately.
 func (sa *ScheduledAction) SetTimeSpec(ts *TimeSpec) {
 	sa.When = ts
+	if sa.cmdChan != nil {
+		sa.cmdChan <- CMD_UPDATE_TIME
+	}
 }
 
+// Change the action.
 func (sa *ScheduledAction) SetAction(f ActionFunc) {
 	sa.Action = f
 }
 
+// Change the parameters.
+// @todo Consider merging with action so they occur atomically, as we wouldn't want
+// @todo to execute an action with wrong parameters.
 func (sa *ScheduledAction) SetParams(args ...interface{}) {
 	sa.Parameters = args
 }
@@ -152,8 +162,14 @@ func (sc *ScheduledAction) startTimer() {
 				sc.Action(sc.Parameters...)
 			case cmd := <-sc.cmdChan:
 				if cmd == CMD_CANCEL {
+					// the scheduled action is being cancelled
 					timer.Stop()
 					break loop
+				} else if cmd == CMD_UPDATE_TIME {
+					// the scheduled action has been updated, and we need to
+					// re-evaluate
+					t = sc.When.GetNextExec()
+					continue loop
 				}
 			}
 			t = sc.When.GetNextExec()
