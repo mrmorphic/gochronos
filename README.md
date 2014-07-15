@@ -7,6 +7,8 @@ The schedule persists for the current process; an application that imports
 gochronos needs to persist scheduled items itself if they need to persist
 beyond application execution.
 
+The module is currently in development. See the "Status" section to see what is currently working and not working.
+
 # Basic Usage
 
 The most basic usage is a one-time scheduled action. The following adds a new
@@ -36,18 +38,27 @@ Recurring scheduled actions are also possible, and are fairly flexible in how th
 NewRecurring() generates a recurring time specification. It accepts a
 map[string]interface{} which contains entries that specify various properties of the time specification. The above example shows a time specification that starts right now, and executes every hour.
 
-To be documented:
+The following properties are currently understood by NewRecurring:
 
- *  all the NewRecurring properties that are understood, and their values. This
-    should include future properties for determining termination conditions,
-    such as counts or a final time.
- *  how next execution times are handled for recurring actions
- *  how Add returns the scheduled action.
- *  that a scheduled action can be removed
- *  that properties of a scheduled action can be changed, even after executed.
- *  how the schedule can be loaded/saved, so that calendar can persist across
-    app executions. Consideration should be given to multitenanted
-    architectures and if there are multiple consumers (assume not)
+ *  **starttime** - (required) a time.Time value, which is a reference
+    time when the first action is executed. This may be in the past; actions
+    are triggered at the specified frequency from this time.
+ *  **frequency** - (required) one of the gochronos.FREQ_* constants. This
+    indicates how frequently the action should occur.
+ *  **interval** - (optional, default is 1) a multiplier on frequency. E.g. if
+    frequency is FREQ_MINUTE and interval is 3, the action will occur every
+    3 minutes.
+ *  **endtime** - (optional) a time.Time value, after which no actions should
+    occur. The default is no end time, so actions will continue according at
+    the required frequency until the program is stopped, or the scheduled
+    action removed from the schedule.
+
+gochronos.Add() returns a *ScheduledAction value. This can be used to cancel
+it, using Remove(), or change the ScheduledAction properties.
+
+# Persisting the schedule
+
+Currently, the module does not support persisting the schedule, so that a program being restarted can pick up where it left off. This is a planned feature.
 
 # How it Works
 
@@ -62,7 +73,7 @@ The process is almost the same for repeat items, except that after executing the
  *  Logging - although to some degree, this is up to the app, which can wrap
     the action in a logging action.
 
-# What works and doesn't work
+# Status
 
 ## Working
 
@@ -81,3 +92,6 @@ The process is almost the same for repeat items, except that after executing the
  *  Recurring with month or year frequency
  *  Recurring with maxnum
  *  Recurring, by minutes, by hours, by days etc
+ *  If scheduled action properties are changed once the goroutine
+    is started, changes won't take effect. This requires a command to be
+    sent to the goroutine telling it to refresh.
