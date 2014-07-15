@@ -1,6 +1,8 @@
 # About gochronos
 
-gochronos is a go library for creating and executing things to a programmable schedule. This is contrast to say, cron, where the schedule is typically fixed. gochronos allows changing the schedule within the app at any point.
+gochronos is a go library for creating and executing things to a programmable schedule. gochronos allows changing the schedule within the app at any point,
+and is designed for making data-driven scheduling easy.
+
 The schedule persists for the current process; an application that imports
 gochronos needs to persist scheduled items itself if they need to persist
 beyond application execution.
